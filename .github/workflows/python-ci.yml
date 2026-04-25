@@ -1,0 +1,68 @@
+name: Python CI (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      python-versions:
+        description: "Python versions to test"
+        required: false
+        type: string
+        default: '["3.11", "3.12"]'
+      run-tests:
+        description: "Whether to run pytest"
+        required: false
+        type: boolean
+        default: true
+      run-mypy:
+        description: "Whether to run mypy"
+        required: false
+        type: boolean
+        default: true
+      coverage-source:
+        description: "Source directory for coverage (callers should override for their src layout)"
+        required: false
+        type: string
+        default: "."
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ${{ fromJson(inputs.python-versions) }}
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4.2.0
+        with:
+          enable-cache: true
+
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Format check
+        run: uv run ruff format --check .
+
+      - name: Type check
+        if: inputs.run-mypy == true
+        run: uv run mypy .
+
+      - name: Test
+        if: inputs.run-tests == true
+        env:
+          COVERAGE_SOURCE: ${{ inputs.coverage-source }}
+        run: uv run pytest tests/ -v --tb=short --cov="$COVERAGE_SOURCE" --cov-report=term-missing
