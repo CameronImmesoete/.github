@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Validate YAML syntax
+        run: |
+          pip install yamllint==1.35.1
+          yamllint -d '{extends: relaxed, rules: {line-length: disable}}' .github/workflows/
+
+      - name: Validate issue templates
+        run: |
+          fail=0
+          for f in .github/ISSUE_TEMPLATE/*.md; do
+            echo "Checking $f..."
+            head -1 "$f" | grep -q "^---" || { echo "FAIL: $f missing frontmatter"; fail=1; }
+          done
+          exit $fail
+
+      - name: Check profile README links
+        run: |
+          npx markdown-link-check@3.12.2 profile/README.md --retry
